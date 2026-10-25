@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.IOException
 
 class VoiceRecorder(private val context: Context) {
@@ -33,11 +35,12 @@ class VoiceRecorder(private val context: Context) {
 
     fun startRecording(): File? {
         stopRecording()
-        val dir = File(context.filesDir, "recordings")
-        if (!dir.exists()) {
-            dir.mkdirs()
+
+        // Target path: echoes/records/10029.mp3
+        val file = EchoStorage.createNewRecordFile(context)
+        if (file.exists()) {
+            file.delete()
         }
-        val file = File(dir, "echo_${System.currentTimeMillis()}.m4a")
         currentOutputFile = file
 
         recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -58,8 +61,9 @@ class VoiceRecorder(private val context: Context) {
                 _isRecording.value = true
                 _recordingDurationSeconds.value = 0
                 startAmplitudeTracking()
+                Log.d("VoiceRecorder", "Started recording to ${file.absolutePath}")
             } catch (e: IOException) {
-                Log.e("VoiceRecorder", "Error starting recording", e)
+                Log.e("VoiceRecorder", "Error preparing recording to ${file.absolutePath}", e)
                 release()
                 return null
             } catch (e: IllegalStateException) {
@@ -83,7 +87,6 @@ class VoiceRecorder(private val context: Context) {
                 } catch (e: Exception) {
                     0
                 }
-                // Normalize 0..32767 to 0f..1f
                 _currentAmplitude.value = (maxAmp / 32767f).coerceIn(0f, 1f)
                 delay(100)
             }
@@ -105,7 +108,24 @@ class VoiceRecorder(private val context: Context) {
         } finally {
             recorder = null
         }
-        return currentOutputFile
+
+        val file = currentOutputFile
+        if (file != null && file.exists()) {
+            Log.d("VoiceRecorder", "Recording stopped. File size: ${file.length()} bytes at ${file.absolutePath}")
+            // Also copy to internal files dir backup
+            try {
+                val internalBackup = File(context.filesDir, "echoes/records/${EchoStorage.DEFAULT_RECORD_FILENAME}")
+                internalBackup.parentFile?.mkdirs()
+                FileInputStream(file).use { input ->
+                    FileOutputStream(internalBackup).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("VoiceRecorder", "Error backing up record file", e)
+            }
+        }
+        return file
     }
 
     fun cancelRecording() {

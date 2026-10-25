@@ -35,6 +35,7 @@ import com.example.ui.screen.IncomingCallScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.PremiumBlack
 import com.example.util.AudioPlayer
+import com.example.util.EchoStorage
 import com.example.util.RingtonePlayer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -152,14 +153,21 @@ private fun IncomingCallScreenContent(
         withContext(Dispatchers.IO) {
             val db = EchoDatabase.getDatabase(context)
             val call = if (callId > 0) db.echoCallDao().getCallById(callId) else null
-            echoCall = call ?: EchoCall(
-                id = callId,
-                title = fallbackTitle,
-                description = "Incoming call scheduled by you across time.",
-                scheduledTimestamp = System.currentTimeMillis(),
-                audioFilePath = "",
-                ringtoneId = defaultProfile.ringtoneId
-            )
+            val resolvedFile = EchoStorage.resolveAudioFile(context, call?.audioFilePath)
+            val path = resolvedFile?.absolutePath ?: (call?.audioFilePath ?: "")
+
+            echoCall = if (call != null) {
+                call.copy(audioFilePath = path)
+            } else {
+                EchoCall(
+                    id = callId,
+                    title = fallbackTitle,
+                    description = "Incoming call scheduled by you across time.",
+                    scheduledTimestamp = System.currentTimeMillis(),
+                    audioFilePath = path,
+                    ringtoneId = defaultProfile.ringtoneId
+                )
+            }
         }
     }
 

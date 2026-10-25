@@ -4,7 +4,6 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
-import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
+import java.io.FileInputStream
 
 class AudioPlayer(private val context: Context) {
     private var mediaPlayer: MediaPlayer? = null
@@ -36,63 +36,76 @@ class AudioPlayer(private val context: Context) {
 
     fun play(filePath: String, onCompletion: (() -> Unit)? = null) {
         stop()
-        if (filePath.isBlank()) {
-            Log.e("AudioPlayer", "Audio file path is blank")
+
+        // Resolve audio file using EchoStorage helper (supports echoes/records/10029.mp3)
+        val file: File? = EchoStorage.resolveAudioFile(context, filePath)
+
+        if (file == null || !file.exists() || file.length() == 0L) {
+            Log.e("AudioPlayer", "No valid recorded audio file found at '$filePath' or in echoes/records/10029.mp3")
             return
         }
 
-        val file = File(filePath)
-        if (!file.exists()) {
-            Log.e("AudioPlayer", "File does not exist: $filePath")
-            return
-        }
+        Log.d("AudioPlayer", "Playing audio from: ${file.absolutePath} (size: ${file.length()} bytes)")
 
         try {
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            audioManager?.mode = AudioManager.MODE_NORMAL
-            audioManager?.isSpeakerphoneOn = _isSpeakerOn.value
-
-            mediaPlayer = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .build()
-                )
-                setDataSource(context, Uri.fromFile(file))
-                setVolume(1.0f, 1.0f)
-
-                setOnPreparedListener { mp ->
-                    try {
-                        _totalDuration.value = mp.duration
-                        mp.start()
-                        _isPlaying.value = true
-                        startProgressTracking()
-                        Log.d("AudioPlayer", "Audio playback started successfully, duration: ${mp.duration}ms")
-                    } catch (e: Exception) {
-                        Log.e("AudioPlayer", "Error starting playback after prepare", e)
-                    }
+            audioManager?.let { am ->
+                am.mode = AudioManager.MODE_NORMAL
+                am.isSpeakerphoneOn = _isSpeakerOn.value
+                val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                val currentVol = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                if (currentVol < maxVol * 0.7f) {
+                    am.setStreamVolume(AudioManager.STREAM_MUSIC, (maxVol * 0.85f).toInt(), 0)
                 }
-
-                setOnCompletionListener {
-                    _isPlaying.value = false
-                    _currentPosition.value = _totalDuration.value
-                    progressJob?.cancel()
-                    onCompletion?.invoke()
-                    Log.d("AudioPlayer", "Audio playback completed")
-                }
-
-                setOnErrorListener { _, what, extra ->
-                    Log.e("AudioPlayer", "MediaPlayer error: what=$what extra=$extra")
-                    _isPlaying.value = false
-                    progressJob?.cancel()
-                    false
-                }
-
-                prepareAsync()
             }
+
+            val player = MediaPlayer()
+            mediaPlayer = player
+
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .build()
+            )
+
+            // Open using FileDescriptor for 100% Android compatibility
+            FileInputStream(file).use { fis ->
+                player.setDataSource(fis.fd)
+            }
+
+            player.setVolume(1.0f, 1.0f)
+
+            player.setOnPreparedListener { mp ->
+                try {
+                    _totalDuration.value = mp.duration
+                    mp.start()
+                    _isPlaying.value = true
+                    startProgressTracking()
+                    Log.d("AudioPlayer", "Playback started successfully. Duration: ${mp.duration}ms")
+                } catch (e: Exception) {
+                    Log.e("AudioPlayer", "Error starting playback in onPrepared", e)
+                }
+            }
+
+            player.setOnCompletionListener {
+                _isPlaying.value = false
+                _currentPosition.value = _totalDuration.value
+                progressJob?.cancel()
+                onCompletion?.invoke()
+                Log.d("AudioPlayer", "Playback finished")
+            }
+
+            player.setOnErrorListener { _, what, extra ->
+                Log.e("AudioPlayer", "MediaPlayer error: what=$what extra=$extra")
+                _isPlaying.value = false
+                progressJob?.cancel()
+                false
+            }
+
+            player.prepareAsync()
         } catch (e: Exception) {
-            Log.e("AudioPlayer", "Error setting up MediaPlayer for $filePath", e)
+            Log.e("AudioPlayer", "Failed to initialize MediaPlayer for ${file.absolutePath}", e)
             stop()
         }
     }
