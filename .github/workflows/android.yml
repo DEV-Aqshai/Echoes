@@ -32,7 +32,7 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools'
 
@@ -43,28 +43,38 @@ jobs:
             "platforms;android-36-ext1" \
             "build-tools;36.0.0"
 
-      - name: Verify Gradle wrapper
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Verify project files
         shell: bash
         run: |
-          if [ ! -f gradlew ]; then
-            echo "::error::gradlew is missing from the repository root."
-            exit 1
-          fi
+          test -f settings.gradle.kts
+          test -f app/build.gradle.kts
+          test -f gradle/libs.versions.toml
+          test -f gradle/wrapper/gradle-wrapper.properties
+          test -f debug.keystore
 
-          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
-            echo "::error::Gradle wrapper JAR is missing."
-            exit 1
-          fi
-
-          chmod +x gradlew
-          java -version
-          ./gradlew --version
+          echo "Project configuration files verified."
 
       - name: Build debug APK
-        run: ./gradlew --no-daemon assembleDebug --stacktrace
+        run: gradle --no-daemon assembleDebug --stacktrace
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "::error::APK was not generated."
+            exit 1
+          fi
+
+          ls -lh "$APK"
 
       - name: Upload debug APK
-        if: always() && hashFiles('app/build/outputs/apk/debug/app-debug.apk') != ''
         uses: actions/upload-artifact@v4
         with:
           name: Echoes-debug-apk
