@@ -21,16 +21,27 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      # NEW: Installs Gradle directly on the runner to generate the missing wrapper
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # NEW: Generates the missing gradlew file
       - name: Generate Gradle Wrapper
         run: gradle wrapper
 
       - name: Grant Execute Permission to Gradle Wrapper
         run: chmod +x gradlew
+
+      # PATCH: Generates a valid debug keystore exactly where your build.gradle expects it
+      - name: Generate Dummy Debug Keystore
+        run: |
+          keytool -genkey -v \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug
