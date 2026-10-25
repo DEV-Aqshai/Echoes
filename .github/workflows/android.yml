@@ -1,120 +1,79 @@
-name: Android CI & APK Build
+
+name: Echoes Android CI
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [main, master]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    name: Build Android APK
+    name: Build Echoes APK
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '21'
+          distribution: temurin
+          java-version: '17'
 
-      - name: Setup Gradle
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-36" \
+            "platforms;android-36-ext1" \
+            "build-tools;36.0.0"
+
+      - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: false
+          gradle-version: '9.3.1'
 
-      - name: Prepare environment configuration (.env)
+      - name: Generate debug signing key
         run: |
-          if [ ! -f .env ]; then
-            if [ -f .env.example ]; then
-              cp .env.example .env
-            else
-              touch .env
-            fi
-          fi
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair \
+            -keystore debug.keystore \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000
 
-      - name: Restore Firebase configuration (if secret provided)
-        env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Verify project configuration
         run: |
-          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-            echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
-            echo "Updated app/google-services.json from GitHub Secrets"
-          elif [ -f "app/google-services.json" ]; then
-            echo "Using repository app/google-services.json"
-          else
-            echo "Warning: app/google-services.json not found"
-          fi
+          test -f settings.gradle.kts
+          test -f app/build.gradle.kts
+          test -f gradle/libs.versions.toml
+          gradle --version
 
-      - name: Restore or Generate Debug Keystore
-        env:
-          SECRET_DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
-        run: |
-          if [ -f "debug.keystore" ] && [ -s "debug.keystore" ]; then
-            echo "Using existing debug.keystore from repository."
-          elif [ -f "debug.keystore.base64" ] && [ -s "debug.keystore.base64" ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
-            echo "Restored debug.keystore from debug.keystore.base64."
-          elif [ -n "$SECRET_DEBUG_KEYSTORE_BASE64" ]; then
-            echo "$SECRET_DEBUG_KEYSTORE_BASE64" | base64 -d > debug.keystore
-            echo "Restored debug.keystore from DEBUG_KEYSTORE_BASE64 secret."
-          else
-            echo "Restoring debug.keystore using embedded base64 fallback..."
-            EMBEDDED_KEY="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"
-            echo "$EMBEDDED_KEY" | base64 -d > debug.keystore
-          fi
+      - name: Build debug APK
+        run: gradle --no-daemon assembleDebug --stacktrace
 
-          if [ ! -s "debug.keystore" ]; then
-            echo "Emergency fallback: generating clean debug.keystore..."
-            keytool -genkeypair -alias androiddebugkey -keypass android -keystore debug.keystore -storepass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
-          fi
-
-          echo "Debug keystore is ready. Keystore SHA-1 fingerprint:"
-          keytool -list -v -keystore debug.keystore -storepass android -alias androiddebugkey | grep "SHA1:" || true
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      - name: Verify APK Output
-        run: |
-          ls -la app/build/outputs/apk/debug/
-          if [ ! -f app/build/outputs/apk/debug/app-debug.apk ]; then
-            echo "Error: app-debug.apk was not generated!"
-            exit 1
-          fi
-
-      - name: Upload Debug APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: unite-student-app-debug
-          path: app/build/outputs/apk/debug/*.apk
-          retention-days: 30
-
-      - name: Build Release APK (Optional, if signing secret exists)
-        if: env.KEYSTORE_BASE64 != ''
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > my-upload-key.jks
-          export KEYSTORE_PATH="$(pwd)/my-upload-key.jks"
-          ./gradlew assembleRelease --stacktrace
-
-      - name: Upload Release APK
-        if: env.KEYSTORE_BASE64 != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: Echoes-release
-          path: app/build/outputs/apk/release/*.apk
-          retention-days: 30
+          name: Echoes-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
