@@ -1,3 +1,4 @@
+
 name: Echoes Android CI
 
 on:
@@ -32,25 +33,29 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
           sdkmanager --install \
-            "platform-tools" \
             "platforms;android-36" \
+            "platforms;android-36-ext1" \
             "build-tools;36.0.0"
 
       - name: Verify Gradle wrapper
         shell: bash
         run: |
-          test -f gradlew || {
+          if [ ! -f gradlew ]; then
             echo "::error::gradlew is missing from the repository root."
             exit 1
-          }
-          test -f gradle/wrapper/gradle-wrapper.jar || {
+          fi
+
+          if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
             echo "::error::Gradle wrapper JAR is missing."
             exit 1
-          }
+          fi
+
           chmod +x gradlew
           java -version
           ./gradlew --version
