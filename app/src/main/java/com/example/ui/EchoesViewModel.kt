@@ -50,58 +50,23 @@ class EchoesViewModel(application: Application) : AndroidViewModel(application) 
     val editingCall: StateFlow<EchoCall?> = _editingCall.asStateFlow()
 
     init {
-        seedSampleCallIfNeeded()
+        cleanupDemoEchoes()
     }
 
-    private fun seedSampleCallIfNeeded() {
+    private fun cleanupDemoEchoes() {
         viewModelScope.launch {
-            // Copy sample audio file to internal storage if needed
-            val recordingsDir = File(context.filesDir, "recordings")
-            if (!recordingsDir.exists()) {
-                recordingsDir.mkdirs()
-            }
-            val sampleAudioFile = File(recordingsDir, "sample_echo_future.wav")
-            if (!sampleAudioFile.exists()) {
-                try {
-                    context.resources.openRawResource(R.raw.sample_echo).use { input ->
-                        FileOutputStream(sampleAudioFile).use { output ->
-                            input.copyTo(output)
-                        }
-                    }
-                } catch (e: Exception) {
-                    // Ignore
+            try {
+                // Ensure no leftover demo echoes appear
+                val call1 = repository.getCallById(1L)
+                if (call1 != null && (call1.title == "Ask how I am doing" || call1.title == "Remember to buy dinner")) {
+                    repository.deleteCall(call1)
                 }
-            }
-
-            // Seed initial sample calls if database is completely empty
-            val initialCalls = repository.getCallById(1L)
-            if (initialCalls == null) {
-                val oneDay = 24L * 60 * 60 * 1000
-                val now = System.currentTimeMillis()
-                val sample1 = EchoCall(
-                    id = 0,
-                    title = "Ask how I am doing",
-                    description = "A check-in from your past self to see if you are staying true to your goals.",
-                    scheduledTimestamp = now + (oneDay * 2),
-                    repeatType = EchoCall.REPEAT_ONCE,
-                    audioFilePath = sampleAudioFile.absolutePath,
-                    audioDurationSeconds = 5,
-                    ringtoneId = "echo_pulse"
-                )
-                repository.saveCall(sample1)
-
-                val sample2 = EchoCall(
-                    id = 0,
-                    title = "Remember to buy dinner",
-                    description = "Don't forget to grab fresh ingredients on the way home!",
-                    scheduledTimestamp = now + (oneDay * 4),
-                    repeatType = EchoCall.REPEAT_WEEKLY,
-                    repeatDayOfWeek = java.util.Calendar.FRIDAY,
-                    audioFilePath = sampleAudioFile.absolutePath,
-                    audioDurationSeconds = 5,
-                    ringtoneId = "retro_phone"
-                )
-                repository.saveCall(sample2)
+                val call2 = repository.getCallById(2L)
+                if (call2 != null && (call2.title == "Remember to buy dinner" || call2.title == "Ask how I am doing")) {
+                    repository.deleteCall(call2)
+                }
+            } catch (e: Exception) {
+                // Ignore
             }
         }
     }

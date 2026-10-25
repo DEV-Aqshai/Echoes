@@ -2,6 +2,7 @@ package com.example.ui.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,8 +21,6 @@ import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
@@ -46,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -57,9 +57,9 @@ import com.example.ui.components.CallerAvatar
 import com.example.ui.components.WaveformVisualizer
 import com.example.ui.theme.AnswerGreen
 import com.example.ui.theme.BeigeYellow
-import com.example.ui.theme.DeclineRed
 import com.example.ui.theme.DarkCard
 import com.example.ui.theme.DarkCardBorder
+import com.example.ui.theme.DeclineRed
 import com.example.ui.theme.MintBlue
 import com.example.ui.theme.OffWhite
 import com.example.ui.theme.PremiumBlack
@@ -93,11 +93,19 @@ fun ActiveCallScreen(
     val totalDuration by audioPlayer.totalDuration.collectAsState()
     val isSpeakerOn by audioPlayer.isSpeakerOn.collectAsState()
 
-    // Call timer ticker
+    // Automatic in-call timer
     LaunchedEffect(Unit) {
         while (true) {
             delay(1000)
             callDurationSeconds++
+        }
+    }
+
+    // AUTOMATIC AUDIO PLAYBACK when call is accepted!
+    LaunchedEffect(call.audioFilePath) {
+        if (call.audioFilePath.isNotEmpty()) {
+            delay(300) // Brief natural telephony connect pause
+            audioPlayer.play(call.audioFilePath)
         }
     }
 
@@ -110,32 +118,40 @@ fun ActiveCallScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(bgColor)
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        bgColor,
+                        PremiumBlack,
+                        Color(0xFF141212)
+                    )
+                )
+            )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 40.dp),
+                .padding(horizontal = 24.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top Section: Call Status & Caller Name
+            // Top Section: Call Status & Contact Info
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(top = 16.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(10.dp)
                             .clip(CircleShape)
                             .background(AnswerGreen)
                     )
                     Text(
-                        text = "CONNECTED ACROSS TIME",
+                        text = "ECHOES VOICE CALL",
                         fontFamily = SpaceGrotesk,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
@@ -150,11 +166,11 @@ fun ActiveCallScreen(
                     text = callerName,
                     fontFamily = SpaceGrotesk,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 28.sp,
+                    fontSize = 30.sp,
                     color = BeigeYellow
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 val durationText = String.format(
                     Locale.US,
@@ -166,38 +182,49 @@ fun ActiveCallScreen(
                     text = durationText,
                     fontFamily = SpaceGrotesk,
                     fontWeight = FontWeight.Medium,
-                    fontSize = 16.sp,
-                    color = OffWhite.copy(alpha = 0.8f)
+                    fontSize = 18.sp,
+                    color = OffWhite.copy(alpha = 0.9f)
                 )
+
+                if (call.title.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = call.title,
+                        fontFamily = SpaceGrotesk,
+                        fontSize = 13.sp,
+                        color = OffWhite.copy(alpha = 0.65f)
+                    )
+                }
             }
 
-            // Middle Section: Caller Avatar & Voice Waveform
+            // Middle Section: Caller Avatar & Playing Waveform
             Column(
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 CallerAvatar(
                     pfpUri = pfpUri,
                     presetId = defaultProfile.presetAvatarId,
-                    size = 130.dp,
+                    size = 140.dp,
                     borderColor = MintBlue
                 )
 
-                Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(26.dp))
 
-                // Voice Waveform visualizer reacting to playback
+                // Voice Waveform animating automatically to the playing audio
                 WaveformVisualizer(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 24.dp),
+                        .padding(horizontal = 20.dp),
                     isRecordingOrPlaying = isPlaying,
-                    amplitude = if (isPlaying) 0.85f else 0.1f,
+                    amplitude = if (isPlaying) 0.85f else 0.15f,
                     activeColor = MintBlue,
                     accentColor = BeigeYellow
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Audio playback progress slider
+                // Audio playback timeline progress
                 val progress = if (totalDuration > 0) {
                     (currentPosition.toFloat() / totalDuration).coerceIn(0f, 1f)
                 } else 0f
@@ -209,7 +236,7 @@ fun ActiveCallScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 32.dp),
+                        .padding(horizontal = 24.dp),
                     colors = SliderDefaults.colors(
                         thumbColor = BeigeYellow,
                         activeTrackColor = MintBlue,
@@ -220,76 +247,66 @@ fun ActiveCallScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 36.dp),
+                        .padding(horizontal = 28.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     val posSec = currentPosition / 1000
                     val totSec = totalDuration / 1000
                     Text(
                         text = String.format(Locale.US, "%02d:%02d", posSec / 60, posSec % 60),
+                        fontSize = 12.sp,
+                        fontFamily = SpaceGrotesk,
+                        color = OffWhite.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = if (isPlaying) "Playing from future" else if (totalDuration > 0) "Finished" else "Connecting...",
                         fontSize = 11.sp,
                         fontFamily = SpaceGrotesk,
-                        color = OffWhite.copy(alpha = 0.6f)
+                        color = if (isPlaying) MintBlue else BeigeYellow
                     )
                     Text(
                         text = String.format(Locale.US, "%02d:%02d", totSec / 60, totSec % 60),
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         fontFamily = SpaceGrotesk,
-                        color = OffWhite.copy(alpha = 0.6f)
+                        color = OffWhite.copy(alpha = 0.7f)
                     )
                 }
 
-                // Audio Play/Pause or Replay controls
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 8.dp)
-                ) {
-                    IconButton(
-                        onClick = {
-                            if (isPlaying) {
-                                audioPlayer.pause()
-                            } else {
-                                if (currentPosition >= totalDuration && totalDuration > 0) {
-                                    audioPlayer.play(call.audioFilePath)
-                                } else {
-                                    audioPlayer.resume()
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(DarkCard)
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause Echo" else "Play Echo",
-                            tint = MintBlue,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
+                Spacer(modifier = Modifier.height(14.dp))
 
-                    IconButton(
-                        onClick = {
-                            audioPlayer.play(call.audioFilePath)
-                        },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(DarkCard)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Replay,
-                            contentDescription = "Restart Echo",
-                            tint = BeigeYellow,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
+                // ONLY REPLAY BUTTON (No play/pause button per user request!)
+                Button(
+                    onClick = {
+                        audioPlayer.replay(call.audioFilePath)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = DarkCard,
+                        contentColor = BeigeYellow
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MintBlue.copy(alpha = 0.6f)),
+                    modifier = Modifier
+                        .height(44.dp)
+                        .testTag("replay_audio_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Replay,
+                        contentDescription = "Replay Audio",
+                        tint = BeigeYellow,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Replay Message",
+                        fontFamily = SpaceGrotesk,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = BeigeYellow
+                    )
                 }
             }
 
-            // Bottom Section: Call Action Buttons & End Call
+            // Bottom Section: In-Call Telephony Action Bar & Big Red End Call
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.fillMaxWidth()
@@ -298,133 +315,147 @@ fun ActiveCallScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 32.dp, vertical = 12.dp),
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceAround,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Mute Button
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        IconButton(
-                            onClick = { isMuted = !isMuted },
-                            modifier = Modifier
-                                .size(52.dp)
-                                .clip(CircleShape)
-                                .background(if (isMuted) BeigeYellow else DarkCard)
-                        ) {
-                            Icon(
-                                imageVector = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                                contentDescription = "Mute",
-                                tint = if (isMuted) PremiumBlack else OffWhite,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = if (isMuted) "Muted" else "Mute",
-                            fontSize = 11.sp,
-                            fontFamily = SpaceGrotesk,
-                            color = OffWhite.copy(alpha = 0.7f)
-                        )
-                    }
-
-                    // Speakerphone Button
+                    // Speakerphone Toggle
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         IconButton(
                             onClick = { audioPlayer.toggleSpeaker() },
                             modifier = Modifier
-                                .size(52.dp)
+                                .size(56.dp)
                                 .clip(CircleShape)
                                 .background(if (isSpeakerOn) MintBlue else DarkCard)
+                                .border(1.dp, if (isSpeakerOn) MintBlue else DarkCardBorder, CircleShape)
                         ) {
                             Icon(
                                 imageVector = if (isSpeakerOn) Icons.Default.VolumeUp else Icons.Default.VolumeOff,
                                 contentDescription = "Speaker",
                                 tint = if (isSpeakerOn) PremiumBlack else OffWhite,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(26.dp)
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = if (isSpeakerOn) "Speaker" else "Earpiece",
                             fontSize = 11.sp,
                             fontFamily = SpaceGrotesk,
-                            color = OffWhite.copy(alpha = 0.7f)
+                            color = OffWhite.copy(alpha = 0.8f)
                         )
                     }
 
-                    // View Note Button
+                    // Mute Mic Toggle
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(
+                            onClick = { isMuted = !isMuted },
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(CircleShape)
+                                .background(if (isMuted) BeigeYellow else DarkCard)
+                                .border(1.dp, if (isMuted) BeigeYellow else DarkCardBorder, CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                contentDescription = "Mute",
+                                tint = if (isMuted) PremiumBlack else OffWhite,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = if (isMuted) "Muted" else "Mute",
+                            fontSize = 11.sp,
+                            fontFamily = SpaceGrotesk,
+                            color = OffWhite.copy(alpha = 0.8f)
+                        )
+                    }
+
+                    // Call Note / Reminder
                     if (call.description.isNotBlank()) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             IconButton(
                                 onClick = { showNoteDialog = !showNoteDialog },
                                 modifier = Modifier
-                                    .size(52.dp)
+                                    .size(56.dp)
                                     .clip(CircleShape)
-                                    .background(DarkCard)
+                                    .background(if (showNoteDialog) MintBlue else DarkCard)
+                                    .border(1.dp, DarkCardBorder, CircleShape)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Info,
                                     contentDescription = "View Note",
-                                    tint = OffWhite,
-                                    modifier = Modifier.size(24.dp)
+                                    tint = if (showNoteDialog) PremiumBlack else OffWhite,
+                                    modifier = Modifier.size(26.dp)
                                 )
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "Note",
                                 fontSize = 11.sp,
                                 fontFamily = SpaceGrotesk,
-                                color = OffWhite.copy(alpha = 0.7f)
+                                color = OffWhite.copy(alpha = 0.8f)
                             )
                         }
                     }
                 }
 
+                // Note Dialog Card
                 if (showNoteDialog && call.description.isNotBlank()) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 8.dp),
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                         colors = CardDefaults.cardColors(containerColor = DarkCard),
                         shape = RoundedCornerShape(16.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardBorder)
                     ) {
-                        Text(
-                            text = call.description,
-                            fontFamily = SpaceGrotesk,
-                            fontSize = 13.sp,
-                            color = BeigeYellow,
-                            modifier = Modifier.padding(14.dp)
-                        )
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text(
+                                text = "Note from the past:",
+                                fontSize = 11.sp,
+                                fontFamily = SpaceGrotesk,
+                                color = MintBlue,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = call.description,
+                                fontFamily = SpaceGrotesk,
+                                fontSize = 13.sp,
+                                color = BeigeYellow
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-                // End Call Button
+                // Large Red Phone Hangup Button
                 Button(
                     onClick = onEndCall,
                     colors = ButtonDefaults.buttonColors(containerColor = DeclineRed),
                     shape = CircleShape,
                     modifier = Modifier
-                        .size(74.dp)
+                        .size(76.dp)
                         .testTag("end_call_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.CallEnd,
                         contentDescription = "End Call",
                         tint = OffWhite,
-                        modifier = Modifier.size(34.dp)
+                        modifier = Modifier.size(36.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "End Echo Call",
+                    text = "End Call",
                     fontFamily = SpaceGrotesk,
-                    fontSize = 12.sp,
-                    color = OffWhite.copy(alpha = 0.6f)
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    color = OffWhite.copy(alpha = 0.7f)
                 )
             }
         }

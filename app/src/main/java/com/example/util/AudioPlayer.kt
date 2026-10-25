@@ -36,6 +36,11 @@ class AudioPlayer(private val context: Context) {
 
     fun play(filePath: String, onCompletion: (() -> Unit)? = null) {
         stop()
+        if (filePath.isBlank()) {
+            Log.e("AudioPlayer", "Audio file path is blank")
+            return
+        }
+
         val file = File(filePath)
         if (!file.exists()) {
             Log.e("AudioPlayer", "File does not exist: $filePath")
@@ -43,29 +48,51 @@ class AudioPlayer(private val context: Context) {
         }
 
         try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            audioManager?.mode = AudioManager.MODE_NORMAL
+            audioManager?.isSpeakerphoneOn = _isSpeakerOn.value
+
             mediaPlayer = MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
                         .build()
                 )
                 setDataSource(context, Uri.fromFile(file))
-                prepare()
-                _totalDuration.value = duration
-                start()
-                _isPlaying.value = true
+                setVolume(1.0f, 1.0f)
+
+                setOnPreparedListener { mp ->
+                    try {
+                        _totalDuration.value = mp.duration
+                        mp.start()
+                        _isPlaying.value = true
+                        startProgressTracking()
+                        Log.d("AudioPlayer", "Audio playback started successfully, duration: ${mp.duration}ms")
+                    } catch (e: Exception) {
+                        Log.e("AudioPlayer", "Error starting playback after prepare", e)
+                    }
+                }
 
                 setOnCompletionListener {
                     _isPlaying.value = false
                     _currentPosition.value = _totalDuration.value
                     progressJob?.cancel()
                     onCompletion?.invoke()
+                    Log.d("AudioPlayer", "Audio playback completed")
                 }
+
+                setOnErrorListener { _, what, extra ->
+                    Log.e("AudioPlayer", "MediaPlayer error: what=$what extra=$extra")
+                    _isPlaying.value = false
+                    progressJob?.cancel()
+                    false
+                }
+
+                prepareAsync()
             }
-            startProgressTracking()
         } catch (e: Exception) {
-            Log.e("AudioPlayer", "Error playing audio file", e)
+            Log.e("AudioPlayer", "Error setting up MediaPlayer for $filePath", e)
             stop()
         }
     }
@@ -83,7 +110,7 @@ class AudioPlayer(private val context: Context) {
                 } catch (e: Exception) {
                     // Ignore transient exceptions
                 }
-                delay(100)
+                delay(80)
             }
         }
     }
@@ -111,6 +138,10 @@ class AudioPlayer(private val context: Context) {
         } catch (e: Exception) {
             Log.e("AudioPlayer", "Error resuming playback", e)
         }
+    }
+
+    fun replay(filePath: String, onCompletion: (() -> Unit)? = null) {
+        play(filePath, onCompletion)
     }
 
     fun seekTo(positionMs: Int) {
