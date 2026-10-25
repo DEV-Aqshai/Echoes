@@ -1,0 +1,6 @@
+{
+  "name": "Echoes",
+  "description": "Call your future self. Record your voice, schedule a call, and pick up when your past self reaches out across time.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

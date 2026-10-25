@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">Echoes</string>
+    <string name="tagline">Call your Future-Self</string>
+    <string name="credits_title">Credits</string>
+    <string name="built_by">Built By Prime™</string>
+    <string name="code_management">Code + Management → AqshaiDev</string>
+    <string name="design_marketing">Design + Marketing → Santhosh</string>
+    <string name="source_code">Source Code</string>
+    <string name="new_call">New Call</string>
+    <string name="default_profile">Default Profile</string>
+    <string name="settings">Settings</string>
+    <string name="no_calls_title">No Echoes Scheduled</string>
+    <string name="no_calls_subtitle">Record a message to yourself and pick up when the future arrives.</string>
+</resources>
