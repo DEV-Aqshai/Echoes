@@ -1,4 +1,3 @@
-
 name: Echoes Android CI
 
 on:
@@ -36,11 +35,17 @@ jobs:
         with:
           packages: 'platform-tools'
 
+      - name: Accept Android SDK licenses
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+
       - name: Install Android SDK packages
+        shell: bash
         run: |
           sdkmanager --install \
+            "platform-tools" \
             "platforms;android-36" \
-            "platforms;android-36-ext1" \
             "build-tools;36.0.0"
 
       - name: Set up Gradle
@@ -60,7 +65,8 @@ jobs:
           echo "Project configuration files verified."
 
       - name: Build debug APK
-        run: gradle --no-daemon assembleDebug --stacktrace
+        shell: bash
+        run: ./gradlew --no-daemon assembleDebug --stacktrace
 
       - name: Verify APK
         shell: bash
